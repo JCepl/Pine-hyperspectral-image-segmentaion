@@ -1,0 +1,140 @@
+# I. R script for Vegetation Index based mask & clustering with K-means:
+# 1. Load necessary libraries ---------------------------------------------
+if (!require(caTools)) install.packages('caTools')
+if (!require(stringr)) install.packages('stringr')
+
+library(caTools)   # For reading ENVI files
+library(stringr)   # For string manipulation
+
+#2. Create output directory -------------------------------------------------
+setwd("~/D_2024/DRASOV2024/to_github")
+
+date_time_stamp <- format(Sys.time(), "%Y_%m_%d_%H_%M")
+res_dir         <- paste0("pixels_WLs_",date_time_stamp)
+dir.create(res_dir)
+
+
+#3. Read centroid data------------------------------------------------------
+centroids85<-read.table("85centroids.txt")
+class(centroids85) 
+
+#4. Read position data------------------------------------------------------
+ID_data <- read.delim("ID_data.txt")
+
+#5. Initialize a dataframe for wavelengths------------------------------------------------------
+res <- data.frame(ID=character(0), matrix(0,0,394))
+
+WLs <- read.table("WLs.txt")
+colnames(res)[2:ncol(res)] <- WLs
+
+#6. Set working directory and get list of image filenames   ------------------------------------------------------
+names<-dir()
+matching_filenames <- grep("^2022-06-25.*Data_dc_ref\\.dat$", names, value = TRUE)
+matching_filenames <- substr(matching_filenames,1,nchar(matching_filenames)-4)
+
+#7. Start processing images   ------------------------------------------------------
+
+# Set the number of iterations based on N of hyperspectral images
+for(pot_i in 1:length(matching_filenames)){
+  try({
+    print(pot_i)
+    pot<-read.ENVI(paste0(matching_filenames[pot_i],".dat"),
+                   headerfile = paste0(matching_filenames[pot_i],".hdr"))
+    
+    #7.1 Remove overexposed and invalid pixels
+    pot[pot>10000]<-0
+    pot[is.na(pot)]<-0
+    pot[!is.finite(pot)]<-0
+    
+    #7.2 Extract pot number from the filename
+    pot_number <- as.numeric(str_extract(matching_filenames[pot_i], "(?<=tray-)\\d+"))
+    
+    #7.3 Find rows in 'Position' corresponding to each position (A1, A2, A3)
+    row_A2 <- which(ID_data$Position == "A2" & ID_data$POT == pot_number)
+    row_A1 <- which(ID_data$Position == "A1" & ID_data$POT == pot_number)
+    row_A3 <- which(ID_data$Position == "A3" & ID_data$POT == pot_number)
+    
+    #7.4 Get the Plant_ID for each position
+    plant_id<-character(3)
+    plant_id[2] <- ID_data$Plant_ID[row_A2]
+    plant_id[1] <- ID_data$Plant_ID[row_A1]
+    plant_id[3] <- ID_data$Plant_ID[row_A3]
+    
+    #7.5 Split the hyperspectral data into three sections for each plant
+    # divide by 10000 to get reflectance data from 0 to 1
+    
+    PLANTS_IMGS <-list()
+    PLANTS_IMGS[[2]]<-pot[110:500,40:300, ]/10000
+    PLANTS_IMGS[[3]]<-pot[310:620,300:650, ]/10000
+    PLANTS_IMGS[[1]]<-pot[1:310,300:650, ]/10000
+
+    #7.6 Define the size of each plant area (in pixels)
+    NROWS <- matrix(NA,3,2)
+    NROWS[2,]<-c(261,391)
+    NROWS[3,]<-c(351,311)
+    NROWS[1,]<-c(351,310)
+    
+    #7.7 Transform each section into a matrix
+    MATS<-list()
+    MATS[[2]]<-matrix(PLANTS_IMGS[[2]],nrow=NROWS[2,1]*NROWS[2,2],ncol=394)
+    MATS[[3]]<-matrix(PLANTS_IMGS[[3]],nrow=NROWS[3,1]*NROWS[3,2],ncol=394)
+    MATS[[1]]<-matrix(PLANTS_IMGS[[1]],nrow=NROWS[1,1]*NROWS[1,2],ncol=394)
+    
+    # 7.8 Calculate vegetation index (VI) based on specific wavelength bands
+    # 1.2*(2.5*(R740-R672)-1.3*(R740-R556))
+    R740<-255
+    R672<-196
+    R556<-94
+    INDEX<-list()
+    INDEX[[2]]  <- 1.2*(2.5*(MATS[[2]][,R740]-MATS[[2]][,R672])-1.3*(MATS[[2]][,R740]-MATS[[2]][,R556]))
+    INDEX[[3]]  <- 1.2*(2.5*(MATS[[3]][,R740]-MATS[[3]][,R672])-1.3*(MATS[[3]][,R740]-MATS[[3]][,R556]))
+    INDEX[[1]]  <- 1.2*(2.5*(MATS[[1]][,R740]-MATS[[1]][,R672])-1.3*(MATS[[1]][,R740]-MATS[[1]][,R556]))
+
+
+#8.Create mask based on VI with 15% threshold extension ------------------------------------------------------
+    #Set the output directory for results in case that mask should be saved 
+    setwd("~/D_2024/DRASOV2024/to_github")
+    for(Cl_i in 1:3){
+      try({
+        
+        #8.1 Apply VI threshold to create mask
+        index_seg <- matrix(INDEX[[Cl_i]],nrow=NROWS[Cl_i,2],ncol=NROWS[Cl_i,1])
+        index_seg[index_seg < 0.15] <- NA
+        
+        #8.2 Modify data for image by graying out non-selected pixel
+        where_NA <-which(is.na(index_seg),arr.ind = T)
+        for(j in 1:nrow(where_NA)){
+          PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],176] <-  1.2*mean(PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],c(21,73,176)])
+          PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],73]  <-  1*mean(PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],c(21,73,176)])
+          PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],21]  <- 0.8*mean(PLANTS_IMGS[[Cl_i]][where_NA[j,1],where_NA[j,2],c(21,73,176)])
+        }
+       
+        #8.3 Create object img visualisating mask
+        #library(magick)
+        #img <- image_read(5*PLANTS_IMGS[[Cl_i]][,,c(176,73,21)])
+        #image_write(img, path = paste0("IND_KM23_",plant_id[Cl_i],".jpg"), format = "png")
+    
+#9. CLUSTERING by K-means ------------------------------------------------------
+    #9.1 K-means clustering based on 85 centroids on the non-NA mask
+    clust  <- kmeans(MATS[[Cl_i]][!is.na(index_seg),], centers = centroids85/10000, nstart = 85, algorithm = "Lloyd")
+    
+    #9.2 Assign cluster values to VI positions
+    Position_clusters<-c(index_seg)
+    Position_clusters[!is.na(Position_clusters)]<-clust$cluster
+    
+    #9.3 Create a matrix for hyperspectral cube with plant cluster numbers
+    Km_seq <- matrix(Position_clusters,nrow=NROWS[Cl_i,2],ncol=NROWS[Cl_i,1])
+    Km_seq[Km_seq%in%c(c(24:85))]<-NA
+
+#10. Save the data from each plant ------------------------------------------------------   
+    #  all clustered pixels with their spectral information 
+    df <- data.frame(ID=plant_id[Cl_i], cluster=Km_seq[!is.na(Km_seq)], MATS[[Cl_i]][!is.na(Km_seq),])
+    write.table(file=paste0(res_dir,"/IND_KM23_",plant_id[Cl_i],".txt"),df)
+      })
+    }
+  })
+}
+
+
+
+
