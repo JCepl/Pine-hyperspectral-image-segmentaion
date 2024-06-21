@@ -10,13 +10,14 @@ This repository contains a set of R scripts and data files used in the analysis 
 ## Usage
 Before running the scripts, ensure you have the following software and libraries installed:
 
-- R (version X.X.X or higher)
-- Required R packages: XXXX
+- R (tested on R version 4.1.2 Bird Hippie)
+- Required R packages: 'caTools', 'stringr'
 
 To use the scripts, follow these steps:
 
-1. Ensure all data files are placed in the appropriate directories as specified in the scripts.
-2. Open R and set the working directory to the repository folder.
+1. Download test data at: https://drive.google.com/drive/folders/1h0VPsPvlxm2rjUBtWN54SmitcWxt50RG?usp=sharing
+2. Ensure all data files are placed in the appropriate directories as specified in the scripts.
+3. Open R and set the working directory to the repository folder.
 
 ## Discussions and Feedback
 
