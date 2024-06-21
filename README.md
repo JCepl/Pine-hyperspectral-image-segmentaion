@@ -21,7 +21,7 @@ To use the scripts, follow these steps:
 
 ## Discussions and Feedback
 
-We welcome discussions and feedback from users to improve the project. Please use the [Issues](https://github.com/yourusername/Pine_segmentation/issues) section to leave comments, suggestions, and questions. This will help us and other users to better understand and utilize the project.
+We welcome discussions and feedback from users to improve the project. 
 
 ## Contribution
 
