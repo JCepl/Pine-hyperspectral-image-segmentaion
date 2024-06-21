@@ -1,4 +1,4 @@
-# Pine-hyperspectral-image-segmentaion 
+# Pine-hyperspectral-image-segmentation 
 
 **Pine_segmentation** is the accompanying code for a scientific publication XXX that involves the segmentation of hyperspectral images of pine seedlings. The data for this project comes from the Drásov Phenotyping Unit (PSI).
 
