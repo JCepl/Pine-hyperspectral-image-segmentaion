@@ -13,7 +13,6 @@ date_time_stamp <- format(Sys.time(), "%Y_%m_%d_%H_%M")
 res_dir         <- paste0("pixels_WLs_",date_time_stamp)
 dir.create(res_dir)
 
-
 #3. Read centroid data------------------------------------------------------
 centroids85<-read.table("85centroids.txt")
 class(centroids85) 
